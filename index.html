@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- use version 0.18.6 -->
+    <title>数据解析</title>
+    <!-- use version 0.18.6 -->
+    <script lang="javascript" src="./xlsx.full.min.js"></script>
+    <style>
+      #target {
+        width: 100%;
+      }
+      table {
+        border-collapse: collapse;
+      }
+      td,
+      th {
+        border: 1px solid;
+      }
+    </style>
+  </head>
+  <body>
+    可以上传或者粘贴部分表格里的数据
+    <div>
+      <input type="file" id="file" />
+    </div>
+    <textarea id="textarea" placeholder="请在此粘贴excel单元格数据"></textarea>
+    <div>
+      <input type="checkbox" onchange="checkboxChange(event)" />启用数据映射
+      <button id="mapBtn" style="display: none">执行</button>
+      <table id="mapTable" style="display: none">
+        <thead>
+          <tr>
+            <th>原始值</th>
+            <th>映射值</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div><textarea id="target" rows="20"></textarea></div>
+  </body>
+  <script>
+    const input = document.getElementById('file');
+    const target = document.getElementById('target');
+    const textarea = document.getElementById('textarea');
+    const mapTable = document.getElementById('mapTable');
+    const mapBtn = document.getElementById('mapBtn');
+
+    let showInfo = [];
+
+    function checkboxChange(e) {
+      if (e.target.checked) {
+        mapTable.style.display = 'table';
+        mapBtn.style.display = 'inline';
+      } else {
+        mapTable.style.display = 'none';
+        mapBtn.style.display = 'none';
+        target.innerHTML = JSON.stringify(showInfo, null, 2);
+      }
+    }
+
+    input.addEventListener('change', (e) => {
+      showInfo = [];
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        let data = e.target.result;
+        const wb = XLSX.read(data, {
+          type: 'base64',
+        });
+        showInfo = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+        genTable();
+        target.innerHTML = JSON.stringify(showInfo, null, 2);
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
+    mapBtn.addEventListener('click', () => {
+      let mapArray = Array.from(mapTable.querySelectorAll('tbody tr')).map((tr) => {
+        const children = tr.children;
+        return [children[0].innerText, children[1].innerText];
+      });
+      let mapShowInfo = showInfo.map((i) => {
+        let obj = {};
+        for (let map of mapArray) {
+          if (map[1]) {
+            obj[map[1]] = i[map[0]];
+          } else {
+            obj[map[0]] = i[map[0]];
+          }
+        }
+        return obj;
+      });
+      target.innerHTML = JSON.stringify(mapShowInfo, null, 2);
+    });
+
+    function genTable() {
+      mapTable.querySelector('tbody').innerHTML = '';
+      Object.keys(showInfo[0]).forEach((i) => {
+        mapTable.querySelector(
+          'tbody',
+        ).innerHTML += `<tr><td>${i}</td><td contenteditable></td></tr>`;
+      });
+    }
+
+    textarea.addEventListener('paste', (e) => {
+      showInfo = [];
+      const html = e.clipboardData.getData('text/html');
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const trs = Array.from(doc.querySelectorAll('table tr'));
+      const keys = [];
+      for (let i = 0; i < trs.length; i++) {
+        if (i === 0) {
+          for (let td of trs[i].children) {
+            keys.push(td.innerText);
+          }
+        } else {
+          let obj = {};
+          for (let j = 0; j < trs[i].children.length; j++) {
+            obj[keys[j]] = trs[i].children[j].innerText;
+          }
+          showInfo.push(obj);
+        }
+      }
+      genTable();
+      target.innerHTML = JSON.stringify(showInfo, null, 2);
+    });
+  </script>
+</html>
